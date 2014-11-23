@@ -1,355 +1,328 @@
 /* jshint unused: false, expr: true */
-/* global describe, it */
+/* global beforeEach, describe, it */
 "use strict";
+
 var util = require('util'),
-	expect = require('chai').expect,
-	express = require('express'),
-	request = require('supertest'),
-	cacheResponseDirective = require('../'),
-	app = express();
+    chai = require('chai'),
+    sinon = require('sinon'),
+    sinonChai = require('sinon-chai'),
+    expect = chai.expect,
+    proxyquire = require('proxyquire');
 
-app.use(cacheResponseDirective());
+chai.should();
+chai.use(sinonChai);
 
-function route(path, cb) {
-	app.get(path, function(req, res) {
-		cb.call(res);
-		res.send('');
-	});
+var setStub,
+    expressProxy,
+    res,
+    cacheControl,
+    header;
+
+
+beforeEach(function() {
+  header = 'header was not set';
+
+  setStub = sinon.spy(function(name, value) {
+    header = value;
+  });
+
+  expressProxy = {
+    response: {
+      set: setStub
+    },
+    '@noCallThru': true
+  };
+
+  cacheControl = proxyquire('../', {
+    'express': expressProxy,
+  });
+
+  res = expressProxy.response;
+
+  res.cacheControl = 
+    res.cacheControl.bind(res);
+});
+
+function withargs() {
+  res.cacheControl.apply(res, arguments);
+  expect(setStub, 'header was never set').to.have.been.calledOnce;
+  return { header: header };
 }
 
-route('/public-obj', function() {
-	this.cacheControl({
-		'public': true
-	});
-});
-
-route('/private-obj', function() {
-	this.cacheControl({
-		'private': true
-	});
-});
-
-route('/max-age', function() {
-	this.cacheControl({
-		'private': true,
-		'max-age': 300
-	});
-});
-
-route('/max-age-alt', function() {
-	this.cacheControl({
-		'private': true,
-		maxAge: 300
-	});
-});
-
-route('/max-age-300s', function() {
-	this.cacheControl({
-		maxAge: '300s'
-	});
-});
-
-route('/max-age-300-s', function() {
-	this.cacheControl({
-		maxAge: '300 s'
-	});
-});
-
-route('/max-age-300-s', function() {
-	this.cacheControl({
-		maxAge: '300 seconds'
-	});
-});
-
-route('/max-age-5minutes', function() {
-	this.cacheControl({
-		maxAge: '5 minutes'
-	});
-});
-
-route('/max-age-5min', function() {
-	this.cacheControl({
-		maxAge: '5 min'
-	});
-});
-
-route('/max-age-1hour', function() {
-	this.cacheControl({
-		maxAge: '1 hour'
-	});
-});
-
-route('/max-age-1h', function() {
-	this.cacheControl({
-		maxAge: '1h'
-	});
-});
-
-route('/max-age-3day', function() {
-	this.cacheControl({
-		maxAge: '3 days'
-	});
-});
-
-route('/max-age-1week', function() {
-	this.cacheControl({
-		maxAge: '1 week'
-	});
-});
-
-route('/max-age-1month', function() {
-	this.cacheControl({
-		maxAge: '1 month'
-	});
-});
-
-route('/max-age-1year', function() {
-	this.cacheControl({
-		maxAge: '1 year'
-	});
-});
-
-route('/no-transform', function() {
-	this.cacheControl({
-		noTransform: true
-	});
-});
-
-route('/s-maxage-1', function() {
-	this.cacheControl({
-		's-maxage': 600
-	});
-});
-
-route('/s-maxage-2', function() {
-	this.cacheControl({
-		sMaxAge: 600
-	});
-});
-
-route('/s-maxage-3', function() {
-	this.cacheControl({
-		sMaxage: 600
-	});
-});
-
-route('/must-revalidate', function() {
-	this.cacheControl({
-		mustRevalidate: true
-	});
-});
-
-route('/proxy-revalidate', function() {
-	this.cacheControl({
-		proxyRevalidate: true
-	});
-});
-
-route('/public-pattern', function() {
-	this.cacheControl('public');
-});
-
-route('/private-pattern', function() {
-	this.cacheControl('private');
-});
-
-route('/no-cache-pattern', function() {
-	this.cacheControl('no-cache');
-});
-
-route('/no-store-pattern', function() {
-	this.cacheControl('no-store');
-});
-
-route('/unknown-pattern-error', function() {
-	this.cacheControl('unknown');
-});
-
-route('/pattern-and-opts', function() {
-	this.cacheControl('private', {
-		mustRevalidate: true
-	});
-});
-
-route('/public-with-private-header', function() {
-	this.cacheControl('public', {
-		'private': "X-Private"
-	});
-});
-
-route('/public-with-private-headers', function() {
-	this.cacheControl('public', {
-		'private': ["X-Private-1", "X-Private-2"]
-	});
-});
-
-route('/public-with-no-cache-header', function() {
-	this.cacheControl('public', {
-		noCache: "X-Uncached"
-	});
-});
-
-app.use(function(err, req, res, next) {
-	res.status(err.status || 500);
-	res.json({
-		error: {
-			message: err.message,
-			stack: err.stack
-		}
-	});
-});
-
-describe('res.cacheControl', function() {
-	function requestShouldHaveCacheControl(path, cacheControl) {
-		it(util.format('should have a Cache-Control header matching "%s"', cacheControl), function(done) {
-			request(app)
-				.get(path)
-				.end(function(err, res) {
-					expect(err).to.not.exist;
-					if ( res.status !== 200 && res.body.error ) {
-						throw res.body.error;
-					} else {
-						expect(res).to.have.property('status')
-							.that.equals(200);
-					}
-
-					expect(res.get('Cache-Control')).to.equal(cacheControl);
-
-					done();
-				});
-		});
-	}
-
-	describe('when passed public: true', function() {
-		requestShouldHaveCacheControl('/public-obj', "public");
-	});
-
-	describe('when passed private: true', function() {
-		requestShouldHaveCacheControl('/private-obj', "private");
-	});
-
-	describe('when passed private: true, max-age: 300', function() {
-		requestShouldHaveCacheControl('/max-age', "private, max-age=300");
-	});
-
-	describe('when passed private: true, maxAge: 300', function() {
-		requestShouldHaveCacheControl('/max-age-alt', "private, max-age=300");
-	});
-
-	describe('when passed maxAge: "300s"', function() {
-		requestShouldHaveCacheControl('/max-age-300s', 'public, max-age=300');
-	});
-
-	describe('when passed maxAge: "300 s"', function() {
-		requestShouldHaveCacheControl('/max-age-300-s', 'public, max-age=300');
-	});
-
-	describe('when passed maxAge: "300 seconds"', function() {
-		requestShouldHaveCacheControl('/max-age-300-s', 'public, max-age=300');
-	});
-
-	describe('when passed maxAge: "5 minutes"', function() {
-		requestShouldHaveCacheControl('/max-age-5minutes', 'public, max-age=300');
-	});
-
-	describe('when passed maxAge: "5 min"', function() {
-		requestShouldHaveCacheControl('/max-age-5min', 'public, max-age=300');
-	});
-
-	describe('when passed maxAge: "1 hour"', function() {
-		requestShouldHaveCacheControl('/max-age-1hour', 'public, max-age=3600');
-	});
-
-	describe('when passed maxAge: "1h"', function() {
-		requestShouldHaveCacheControl('/max-age-1h', 'public, max-age=3600');
-	});
-
-	describe('when passed maxAge: "3 days"', function() {
-		requestShouldHaveCacheControl('/max-age-3day', 'public, max-age=259200');
-	});
-
-	describe('when passed maxAge: "1 week"', function() {
-		requestShouldHaveCacheControl('/max-age-1week', 'public, max-age=604800');
-	});
-
-	describe('when passed maxAge: "1 month"', function() {
-		requestShouldHaveCacheControl('/max-age-1month', 'public, max-age=2592000');
-	});
-
-	describe('when passed maxAge: "1 year"', function() {
-		requestShouldHaveCacheControl('/max-age-1year', 'public, max-age=31556926');
-	});
-
-	describe('when passed noTransform: true', function() {
-		requestShouldHaveCacheControl('/no-transform', "no-transform");
-	});
-
-	describe('when passed s-maxage: 600', function() {
-		requestShouldHaveCacheControl('/s-maxage-1', "s-maxage=600");
-	});
-
-	describe('when passed sMaxAge: 600', function() {
-		requestShouldHaveCacheControl('/s-maxage-2', "s-maxage=600");
-	});
-
-	describe('when passed sMaxage: 600', function() {
-		requestShouldHaveCacheControl('/s-maxage-3', "s-maxage=600");
-	});
-
-	describe('when passed mustRevalidate: true', function() {
-		requestShouldHaveCacheControl('/must-revalidate', "must-revalidate");
-	});
-
-	describe('when passed proxyRevalidate: true', function() {
-		requestShouldHaveCacheControl('/proxy-revalidate', "proxy-revalidate");
-	});
-
-	describe('when passed "public"', function() {
-		requestShouldHaveCacheControl('/public-pattern', "public");
-	});
-
-	describe('when passed "private"', function() {
-		requestShouldHaveCacheControl('/private-pattern', "private");
-	});
-
-	describe('when passed "no-cache"', function() {
-		requestShouldHaveCacheControl('/no-cache-pattern', "no-cache");
-	});
-
-	describe('when passed "no-store"', function() {
-		requestShouldHaveCacheControl('/no-store-pattern', "no-cache, no-store");
-	});
-
-	describe('when passed "unknown"', function() {
-		it('should throw an error', function(done) {
-			request(app)
-				.get('/unknown-pattern-error')
-				.end(function(err, res) {
-					expect(err).to.not.exist;
-					expect(res).to.have.a.property('status')
-						.that.equals(500);
-					expect(res).to.have.a.property('body')
-						.that.has.a.property('error');
-
-					done();
-				});
-		});
-	});
-
-	describe('when passed "private" and mustRevalidate: true', function() {
-		requestShouldHaveCacheControl('/pattern-and-opts', "private, must-revalidate");
-	});
-
-	describe('when passed "public" and private: "X-Private"', function() {
-		requestShouldHaveCacheControl('/public-with-private-header', 'public, private="X-Private"');
-	});
-
-	describe('when passed "public" and private: ["X-Private-1", "X-Private-2"]', function() {
-		requestShouldHaveCacheControl('/public-with-private-headers', 'public, private="X-Private-1, X-Private-2"');
-	});
-
-	describe('when passed "public" and no-cache: "X-Uncached"', function() {
-		requestShouldHaveCacheControl('/public-with-no-cache-header', 'public, no-cache="X-Uncached"');
-	});
-
+describe('cacheControl', function() {
+  it('should add `cacheControl` function to response prototype', function() {
+    res.should.respondTo('cacheControl');
+  });
+  
+  it('should not change `cacheControl` function if it exists already', function() {
+    var func = function() {};
+
+    res.cacheControl = func;
+
+    res.cacheControl.should.equal(func);
+  });
+
+  it('should set proper Cache-Control header name', function() {
+    res.cacheControl('1m');
+
+    setStub.should.have.been.calledWith('Cache-Control', sinon.match.any);
+  });
+
+  it('should not set header with no directive', function() {
+    res.cacheControl();
+
+    setStub.should.not.have.been.called;
+  });
+
+  describe('with single object parameter', function() {
+    it('should convert public:true to public header', function() {
+      withargs({ public: true }).header.should.contain('public');
+    });
+
+    it('should convert private:true to private header', function() {
+      withargs({ private: true }).header.should.contain('private');
+    });
+
+    it('should convert noTransform:true to no-transform header', function() {
+      withargs({ noTransform: true }).header.should.contain('no-transform');
+    });
+
+    it('should convert mustRevalidate:true to must-revalidate header', function() {
+      withargs({ mustRevalidate: true }).header.should.contain('must-revalidate');
+    });
+
+    it('should convert proxyRevalidate:true to proxy-revalidate header', function() {
+      withargs({ proxyRevalidate: true }).header.should.contain('proxy-revalidate');
+    });
+
+    it('should add no-cache when no-store is set', function() {
+      withargs({ noStore: true }).header.should.contain('no-cache');
+    });
+
+    it('should not add no-cache when no-store is set if noCache is set explicity false', function() {
+      withargs({ noStore: true, noCache: false }).header.should.not.contain('no-cache');
+    });
+
+    it('should not set or throw on unknown directive', function() {
+      withargs({ public: true, unknown: true, whatisthis: '300' }).header.should.equal('public');
+    });
+
+    it('should not set header with all falsy directives', function() {
+      res.cacheControl({ private: false, public: false, noTransform: false });
+
+      setStub.should.not.have.been.called;
+    });
+
+    it('should not set header with no directives', function() {
+      res.cacheControl({ });
+
+      setStub.should.not.have.been.called;
+    });
+  });
+
+  describe('with optional field directives', function() {
+    it('should set private token value', function() {
+      withargs({ private: 'X-Private' }).header.should.contain('private="X-Private"');
+    });
+
+    it('should set private token array value', function() {
+      withargs({ private: ['X-Private', 'X-Private-2']})
+        .header.should.contain('private="X-Private, X-Private-2"');
+    });
+
+    it('should set no-cache token value', function() {
+      withargs({ noCache: 'X-Uncached' }).header.should.contain('no-cache="X-Uncached"');
+    });
+
+    it('should set no-cache token array value', function() {
+      withargs({ noCache: ['X-Uncached', 'X-Uncached-2']})
+        .header.should.contain('no-cache="X-Uncached, X-Uncached-2"');
+    });
+
+    it('should throw on no-string token', function() {
+      expect(function() {
+        withargs({ private: 100 });
+      }).to.throw(/Invalid value `100` for the private field directive/);
+    });
+
+    it('should throw on invalid token in array', function() {
+      expect(function() {
+        withargs({ private: ['X-Valid', 100] });
+      }).to.throw(/Invalid value `100` for the private field directive/);
+    });
+
+    it('should throw on malformed string token', function() {
+      expect(function() {
+        withargs({ private: 'So invalid' });
+      }).to.throw(/Invalid token "So invalid" for the private field directive/);
+    });
+  });
+
+  describe('with mutually exlusive directives', function() {
+    it('should throw with public and private', function() {
+      expect(function() {
+        withargs({ public: true, private: true });
+      }).to.throw(/The public, private:true, and no-cache:true\/no-store directives are exclusive, you cannot define more than one of them/);
+    });
+
+    it('should throw with public and noCache', function() {
+      expect(function() {
+        withargs({ public: true, noCache: true });
+      }).to.throw(/The public, private:true, and no-cache:true\/no-store directives are exclusive, you cannot define more than one of them/);
+    });
+
+    it('should throw with private and noCache', function() {
+      expect(function() {
+        withargs({ private: true, noCache: true });
+      }).to.throw(/The public, private:true, and no-cache:true\/no-store directives are exclusive, you cannot define more than one of them/);
+    });
+
+    it('should throw with public and noStore', function() {
+      expect(function() {
+        withargs({ public: true, noStore: true });
+      }).to.throw(/The public, private:true, and no-cache:true\/no-store directives are exclusive, you cannot define more than one of them/);
+    });
+
+    it('should throw with private and noStore', function() {
+      expect(function() {
+        withargs({ private: true, noStore: true });
+      }).to.throw(/The public, private:true, and no-cache:true\/no-store directives are exclusive, you cannot define more than one of them/);
+    });
+  });
+
+  describe('with maxAge', function() {
+    it('should convert maxAge number to public max-age header', function() {
+      withargs({ maxAge: 100 }).header.should.contain('max-age=100');
+    });
+
+    it('should convert maxAge time string to public max-age header', function() {
+      withargs({ maxAge: '1m' }).header.should.contain('max-age=60');
+    });
+
+    it('should add public directive by default with max-age', function() {
+      withargs({ maxAge: '1m' }).header.should.contain('public');
+    });
+
+    it('should be able to set public directive with max-age', function() {
+      withargs({ maxAge: 100, public: true })
+        .header.should.contain('public')
+        .and.contain('max-age=100');
+    });
+
+    it('should be able to set private directive with max-age', function() {
+      withargs({ maxAge: 100, private: true })
+        .header.should.contain('private')
+        .and.contain('max-age=100');
+    });
+
+    it('should be able to set no-cache directive with max-age', function() {
+      withargs({ maxAge: 100, noCache: true })
+        .header.should.contain('no-cache')
+        .and.contain('max-age=100');
+    });
+
+    it('should be able to set no-store directive with max-age', function() {
+      withargs({ maxAge: 100, noStore: true })
+        .header.should.contain('no-store')
+        .and.contain('max-age=100');
+    });
+
+    it('should throw on maxAge:"unknown"', function() {
+      expect(function() {
+        withargs({ maxAge: 'unknown' });
+      }).to.throw(/Invalid value `unknown` for the max-age delta directive/);
+    });
+  });
+
+  describe('with sMaxAge', function() {
+    it('should convert sMaxage number to s-maxage header ', function() {
+      withargs({ sMaxage: 100 }).header.should.contain('s-maxage=100');
+    });
+
+    it('should convert sMaxAge time string to s-maxage header ', function() {
+      withargs({ sMaxAge: '1m'}).header.should.contain('s-maxage=60');
+    });
+
+    it('should throw on sMaxAge:"unknown"', function() {
+      expect(function() {
+        withargs({ sMaxAge: 'unknown' });
+      }).to.throw(/Invalid value `unknown` for the s-maxage delta directive/);
+    });
+
+    it('should not set s-maxage if private is set', function() {
+      withargs({ sMaxAge: 100, private: true }).header.should.not.contain('s-maxage');
+    });
+
+    it('should not set s-maxage if no-cache is set', function() {
+      withargs({ sMaxAge: 100, noCache: true }).header.should.not.contain('s-maxage');
+    });
+
+    it('should not set s-maxage if no-store is set', function() {
+      withargs({ sMaxAge: 100, noStore: true }).header.should.not.contain('s-maxage');
+    });
+  });
+
+  describe('with single string or number parameter', function() {
+    it('should convert a time string to a public max-age header', function() {
+      withargs('1m').header.should.equal('public, max-age=60');
+    });
+
+    it('should convert a number to a public max-age header', function() {
+      withargs(300).header.should.equal('public, max-age=300');
+    });
+
+    it('should convert "public" to public header', function() {
+      withargs('public').header.should.equal('public');
+    });
+
+    it('should convert "private" to private header', function() {
+      withargs('private').header.should.equal('private');
+    });
+
+    it('should convert "no-cache" to no-cache header', function() {
+      withargs('no-cache').header.should.equal('no-cache');
+    });
+
+    it('should convert "no-store" to no-store header', function() {
+      withargs('no-store').header.should.contain('no-store');
+    });
+
+    it('should throw on "unknown"', function() {
+      expect(function() {
+        withargs('unknown');
+      }).to.throw(/Invalid value `unknown` for the max-age delta directive/);
+    });
+
+    it('should not set header with empty directive', function() {
+      res.cacheControl('');
+
+      setStub.should.not.have.been.called;
+    });
+  });
+
+  describe('when chained', function() {
+    it('should return the response object for chaining', function() {
+      res.cacheControl('public', { maxAge: '1m' }).should.equal(res);
+    });
+  });
+
+  describe('when middleware', function() {
+    it('should return middleware function', function() {
+      cacheControl('public').should.be.a.function;
+    });
+
+    it('should call `res.cacheControl` with args then `next`', function() {
+      res.cacheControl = sinon.stub();
+      var next = sinon.stub();
+      var objArg = { maxAge: '1d' };
+
+      cacheControl('public', objArg)(null, res, next);
+
+      res.cacheControl.should.have.been.calledWith('public', objArg);
+
+      next.should.have.been.calledOnce;
+      next.should.have.been.calledWith();
+      next.should.have.been.calledAfter(res.cacheControl);
+    });
+  });
 });

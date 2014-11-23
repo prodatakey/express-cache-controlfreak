@@ -1,7 +1,9 @@
 "use strict";
 var debug = require('debug')('express-cache-response-directive'),
-	util = require('util'),
-	Qty = require('js-quantities'),
+    util = require('util'),
+    ms = require('ms'),
+    express = require('express'),
+
 	// Cache-Control header name
 	cacheControlHeader = 'Cache-Control',
 	// Regexp matching HTTP/1.1 tokens
@@ -60,19 +62,19 @@ function normalizeOpts(pattern, opts) {
 		opt,
 		normOpt;
 
-	if ( typeof pattern === 'string' ) {
+	if ( typeof pattern === 'string' || typeof pattern === 'number' ) {
 		opts = opts || {};
 
-		if ( !patternDefaults.hasOwnProperty(pattern) ) {
-			throw new Error("Cache-Control: Unknown simple directive pattern");
-		}
-
-		pattern = patternDefaults[pattern];
-
-		for ( opt in pattern ) {
-			normOpts[opt] = pattern[opt];
-		}
-	} else {
+		if ( patternDefaults.hasOwnProperty(pattern) ) {
+      pattern = patternDefaults[pattern];
+      for ( opt in pattern ) {
+        normOpts[opt] = pattern[opt];
+      }
+		} else {
+      // If this is not one of the cache control flags, treat it as a max-age value
+      opts.maxAge = pattern;
+    }
+  } else {
 		opts = pattern || {};
 	}
 
@@ -98,12 +100,12 @@ function normalizeOpts(pattern, opts) {
 	if ( normOpts['no-cache'] === true || normOpts['no-store'] ) { exclusiveDirectives++; }
 
 	if ( exclusiveDirectives > 1 ) {
-		throw new Error("Cache-Control: The public, private:true, and no-cache:true/no-store directives are exclusive, you cannot define more than one of them.");
+		throw new Error("cacheControl: The public, private:true, and no-cache:true/no-store directives are exclusive, you cannot define more than one of them.");
 	}
 
 	// Some browsers have begun treating no-cache like they do no-store so when
 	// no-store is set also define no-cache.
-	if ( normOpts['no-store'] && !normOpts['no-cache'] ) {
+	if ( normOpts['no-store'] && normOpts['no-cache'] !== false ) {
 		normOpts['no-cache'] = true;
 	}
 
@@ -120,101 +122,89 @@ function normalizeOpts(pattern, opts) {
 	return normOpts;
 }
 
-module.exports = function cacheResponseDirective() {
-	function cacheControl(pattern, opts) {
-		// jshint validthis: true
-		opts = normalizeOpts(pattern, opts);
+function cacheControlImpl(pattern, opts) {
+  // jshint validthis: true
+  opts = normalizeOpts(pattern, opts);
 
-		var directives = [];
+  var directives = [];
 
-		validDirectives.forEach(function(directiveName) {
-			// jshint newcap: false
-			if ( !opts.hasOwnProperty(directiveName) ) {
-				return;
-			}
+  validDirectives.forEach(function(directiveName) {
+    // jshint newcap: false
+    if ( !opts.hasOwnProperty(directiveName) ) {
+      return;
+    }
 
-			var value = opts[directiveName],
-				m,
-				qty;
+    var value = opts[directiveName];
 
-			if ( !value ) {
-				return;
-			}
+    if ( !value ) {
+      return;
+    }
 
-			if ( deltaDirectives.indexOf(directiveName) !== -1 ) {
-				if ( typeof value === 'string' ) {
-					if ( m = /^(\d+)\s*(s|sec|seconds?)$/i.exec(value) ) {
-						qty = Qty(parseInt(m[1], 10) + ' seconds');
-					} else if ( m = /^(\d+)\s*(min|minutes?)$/i.exec(value) ) {
-						qty = Qty(parseInt(m[1], 10) + ' minutes');
-					} else if ( m = /^(\d+)\s*(h|hours?)$/i.exec(value) ) {
-						qty = Qty(parseInt(m[1], 10) + ' hours');
-					} else if ( m = /^(\d+)\s*(d|days?)$/i.exec(value) ) {
-						qty = Qty(parseInt(m[1], 10) + ' days');
-					} else if ( m = /^(\d+)\s*(w|wk|weeks?)$/i.exec(value) ) {
-						qty = Qty(parseInt(m[1], 10) + ' weeks');
-					} else if ( m = /^(\d+)\s*(months?)$/i.exec(value) ) {
-						var months = parseInt(m[1], 10),
-							days = months * 30;
-						debug('treating %s month(s) as %s days for %s', months, days, directiveName);
-						qty = Qty(days + ' days');
-					} else if ( m = /^(\d+)\s*(y|years?)$/i.exec(value) ) {
-						qty = Qty(parseInt(m[1], 10) + ' years');
-					} else {
-						throw new Error(util.format("cacheControl: Invalid time string `%s` for the %s delta directive.", value, directiveName));
-					}
+    if ( deltaDirectives.indexOf(directiveName) !== -1 ) {
+      if ( typeof value === 'string' ) {
+        var milliseconds = ms(value);
+        if(milliseconds) {
+          value = milliseconds / 1000;
+        }
+      }
 
-					value = Math.round(qty.to('seconds').scalar);
-				}
+      if ( typeof value === 'number' ) {
+        directives.push(directiveName + '=' + value);
+      } else {
+        throw new Error(util.format("cacheControl: Invalid value `%s` for the %s delta directive.", value, directiveName));
+      }
+    } else if ( optionalFieldDirectives.indexOf(directiveName) !== -1 ) {
+      if ( value === true ) {
+        directives.push(directiveName);
+        return;
+      }
 
-				if ( typeof value === 'number' ) {
-					directives.push(directiveName + '=' + value);
-				} else {
-					throw new Error(util.format("cacheControl: Invalid value `%s` for the %s delta directive.", value, directiveName));
-				}
-			} else if ( optionalFieldDirectives.indexOf(directiveName) !== -1 ) {
-				if ( value === true ) {
-					directives.push(directiveName);
-					return;
-				}
+      if ( !Array.isArray(value) ) {
+        value = [value];
+      }
 
-				if ( !Array.isArray(value) ) {
-					value = [value];
-				}
+      value = value.filter(function(val) {
+        return val !== false;
+      });
 
-				value = value.filter(function(val) {
-					return val !== false;
-				});
+      value.forEach(function(val) {
+        if ( typeof val === 'string' ) {
+          if ( tokenRegexp.test(val) ) {
+            return;
+          }
 
-				value.forEach(function(val) {
-					if ( typeof val === 'string' ) {
-						if ( tokenRegexp.test(val) ) {
-							return;
-						}
+          throw new Error(util.format("cacheControl: Invalid token \"%s\" for the %s field directive.", val, directiveName));
+        }
 
-						throw new Error(util.format("cacheControl: Invalid token \"%s\" for the %s field directive.", val, directiveName));
-					}
+        throw new Error(util.format("cacheControl: Invalid value `%s` for the %s field directive.", val, directiveName));
+      });
 
-					throw new Error(util.format("cacheControl: Invalid value `%s` for the %s field directive.", val, directiveName));
-				});
+      if ( value.length ) {
+        directives.push(directiveName + '="' + value.join(', ') + '"');
+      }
+    } else {
+      // Everything else is a boolean directive with no value
+      directives.push(directiveName);
+    }
+  });
 
-				if ( value.length ) {
-					directives.push(directiveName + '="' + value.join(', ') + '"');
-				}
-			} else {
-				// Everything else is a boolean directive with no value
-				directives.push(directiveName);
-			}
-		});
+  if ( directives.length ) {
+    this.set(cacheControlHeader, directives.join(', '));
+  }
+}
 
-		if ( directives.length ) {
-			this.set(cacheControlHeader, directives.join(', '));
-		}
-	}
+// Add the `cache` function to the response object prototype
+if(!express.response.cacheControl) {
+  express.response.cacheControl = function cacheControl(pattern, opts) {
+    cacheControlImpl.call(this, pattern, opts);
+    return this;
+  };
+}
 
-	return function cacheResponseDirectiveMiddleware(req, res, next) {
-		res.cacheControl = cacheControl;
-
+// Support cache functionality as middleware also
+module.exports = function cacheControlMiddleware(pattern, opts) {
+	return function middleware(req, res, next) {
+    res.cacheControl(pattern, opts);
 		next();
 	};
 };

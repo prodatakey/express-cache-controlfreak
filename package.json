@@ -1,8 +1,8 @@
 {
-  "name": "express-cache-response-directive",
-  "version": "0.2.0",
+  "name": "express-cache-controlfreak",
+  "version": "0.1.0",
   "license": "MIT",
-  "description": "ExpressJS middleware that gives Response objects an intuitive .cacheControl method to set Cache-Control headers.",
+  "description": "ExpressJS middleware that gives Response objects an intuitive chainable `cache` method to set Cache-Control headers.",
   "keywords": [
     "expressjs",
     "middleware",
@@ -29,16 +29,17 @@
   },
   "dependencies": {
     "debug": "^1.0.3",
-    "js-quantities": "^1.4.1"
+    "ms": "^0.6.2"
   },
   "devDependencies": {
     "chai": "^1.9.1",
     "coveralls": "^2.11.1",
-    "express": "^4.6.1",
     "istanbul": "^0.3.0",
     "mocha": "^1.20.1",
     "mocha-jshint": "0.0.7",
     "mocha-lcov-reporter": "0.0.1",
-    "supertest": "^0.13.0"
+    "proxyquire": "^1.1.0",
+    "sinon": "^1.12.1",
+    "sinon-chai": "^2.6.0"
   }
 }
