@@ -30,7 +30,7 @@
     "coveralls": "istanbul cover _mocha --report lcovonly -- -R spec && cat ./coverage/lcov.info | coveralls && rm -rf ./coverage"
   },
   "dependencies": {
-    "debug": "^1.0.3",
+    "debug": "^2.0.3",
     "ms": "^0.6.2"
   },
   "peerDependencies": {
