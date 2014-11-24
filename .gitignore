@@ -1,5 +1,7 @@
 node_modules/
-/.coveralls.yml
+coverage/
+.coveralls.yml
+npm-debug.log
 .DS_Store
 ._*
 *~

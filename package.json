@@ -14,13 +14,13 @@
     "url": "http://danielfriesen.name",
     "email": "daniel@nadir-seen-fire.com"
   },
-  "homepage": "https://github.com/dantman/express-cache-response-directive",
+  "homepage": "https://github.com/prodatakey/express-cache-controlfreak",
   "repository": {
     "type": "git",
-    "url": "https://github.com/dantman/express-cache-response-directive.git"
+    "url": "https://github.com/prodatakey/express-cache-controlfreak.git"
   },
   "bugs": {
-    "url": "https://github.com/dantman/express-cache-response-directive/issues"
+    "url": "https://github.com/prodatakey/express-cache-controlfreak/issues"
   },
   "main": "index.js",
   "scripts": {
