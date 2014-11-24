@@ -19,23 +19,42 @@ $ npm install express-cache-response-directive
 ## Usage
 
 ```js
-var cacheResponseDirective = require('express-cache-response-directive');
+var cacheControl = require('express-cache-response-directive');
 ```
 
+### As Middleware
+
+The function can be used as middleware to set cache control headers in your handler chains.
+
 ```js
-app.use(cacheResponseDirective());
+// Set max age header for this route with the get verb
+app.get('/', cacheControl({ maxAge: 300 }), function(req, res, next) {
+    res.status(200).json({ success: true })
+});
 ```
+
+This means you can also easily set app-wide cache-control settings.
+
+```js
+// Set default no-cache header for the whole app
+app.use(cacheControl('no-cache'));
+```
+
+### Chained
+
+The headers can also be set with the chainable `cacheControl` function that is added to the response object.
 
 ```js
 app.get('/', function(req, res, next) {
-	res.cacheControl({maxAge: 300});
-	// ...
+	res.cacheControl({maxAge: 300})
+	   .status(200)
+       .json({ success: true });
 });
 ```
 
 ### res.cacheControl([pattern], [options])
 
-The method added by the middleware accepts an optional string pattern and an object of Cache-Control options. Both are optional but at least one of them should be specified.
+The method added by the module accepts an optional string pattern and an object of Cache-Control options. Both are optional but at least one of them should be specified.
 
 See the [HTTP/1.1 Standard's Cache-Control sections](http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.9) for information on the usage of Cache-Control directives.
 
@@ -70,6 +89,26 @@ res.cacheControl("no-cache");
 res.cacheControl("no-store");
 // Cache-Control: no-cache, no-store
 ```
+
+##### Time Strings and Numbers
+
+The max-age header can be set quickly in a similar manner, using a time string or explicit number. By default, the public directive is also added.
+
+```js
+res.cacheControl("1h");
+// Cache-Control: public, max-age=3600
+```
+
+```js
+res.cacheControl(60);
+// Cache-Control: public, max-age=60
+```
+
+#### Time Strings
+
+Simple time strings can be used for setting the `max-age` and `s-maxage` directives.
+See the [ms](https://www.npmjs.org/package/ms) library, which is used to parse the time string, for the syntax.
+This is the same library and syntax used by the express [sendFile](http://expressjs.com/api.html#res.sendFile) function.
 
 #### Options
 
