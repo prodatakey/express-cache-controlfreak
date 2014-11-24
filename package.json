@@ -10,10 +10,12 @@
     "cache control"
   ],
   "author": {
-    "name": "Daniel Friesen",
-    "url": "http://danielfriesen.name",
-    "email": "daniel@nadir-seen-fire.com"
+    "name": "Joshua Perry",
+    "email": "josh@pdk.io"
   },
+  "contributors": [
+    "Daniel Friesen <daniel@nadir-seen-fire.com>"
+  ],
   "homepage": "https://github.com/prodatakey/express-cache-controlfreak",
   "repository": {
     "type": "git",
