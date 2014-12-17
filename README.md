@@ -1,4 +1,4 @@
-# express-cache-response-directive
+# express-cache-controlfreak
 
   [![NPM version](https://badge.fury.io/js/express-cache-controlfreak.svg)](http://badge.fury.io/js/express-cache-controlfreak)
   [![Build Status](https://travis-ci.org/prodatakey/express-cache-controlfreak.svg)](https://travis-ci.org/prodatakey/express-cache-controlfreak)
@@ -14,13 +14,13 @@ This middleware doesn't define legacy Expires headers. For compatibility with ol
 ## Install
 
 ```bash
-$ npm install express-cache-response-directive
+$ npm install express-cache-controlfreak
 ```
 
 ## Usage
 
 ```js
-var cacheControl = require('express-cache-response-directive');
+var cacheControl = require('express-cache-controlfreak');
 ```
 
 ### As Middleware
