@@ -1,6 +1,6 @@
 {
   "name": "express-cache-controlfreak",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "license": "MIT",
   "description": "ExpressJS middleware that gives Response objects an intuitive chainable `cache` method to set Cache-Control headers.",
   "keywords": [
